@@ -1,0 +1,117 @@
+
+x-logs:
+  &loki-logging
+  driver: loki
+  options:
+    loki-url: "http://loki:3100/loki/api/v1/push"
+
+networks:
+  traefik_net:
+    name: "traefik_net"
+    external: true
+  monitoring_net:
+    name: "monitoring_net"
+    driver: bridge
+
+services:
+  
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION}
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - traefik_net
+      - monitoring_net
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./prometheus/web.yaml:/etc/prometheus/web.yaml:ro
+      - ${VOLUME_PATH_PROMETHEUS}:/prometheus
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`${PROMETHEUS_DOMAIN}`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--web.config.file=/etc/prometheus/web.yaml"
+      - "--storage.tsdb.retention.size=20GB"
+    
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring_net
+    logging: *loki-logging
+    volumes:
+      - /home/node:/home/node:ro
+  
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor
+    container_name: cadvisor
+    restart: unless-stopped
+    networks:
+      - monitoring_net
+    logging: *loki-logging
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+#  alertmanager:
+#    image: prom/alertmanager:latest
+#    restart: unless-stopped
+#    networks:
+#      - monitoring_net
+#    logging: *loki-logging
+#    volumes:
+#      - ./monitoring/alertmanager/config.yaml:/etc/alertmanager/config.yaml
+#    command:
+#      - "--config.file=/etc/alertmanager/config.yaml"
+    
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: unless-stopped
+    networks:
+      - monitoring_net
+    volumes:
+      - ./monitoring/loki/loki-config.yaml:/etc/loki/local-config.yaml
+    command:
+      - "--config.file=/etc/loki/local.config.yaml"
+  
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    restart: unless-stopped
+    networks:
+      - monitoring_net
+    volumes:
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - .monitoring/promtail/config.yaml:/etc/promtail/promtail-config.yaml
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION}
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - traefik_net
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${VOLUME_PATH_GRAFANA}:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - TZ=${TZ}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`${GRAFANA_DOMAIN}`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
