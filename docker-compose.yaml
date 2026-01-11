@@ -7,11 +7,11 @@ networks:
     driver: bridge
 
 volumes:
-  grafana-data:
-  prometheus-data:
+  grafana_data:
+  prometheus_data:
 
 services:
-  
+
   prometheus:
     image: prom/prometheus:${PROMETHEUS_VERSION}
     container_name: prometheus
@@ -25,7 +25,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ./prometheus/web.yaml:/etc/prometheus/web.yaml:ro
-      - prometheus-data:/prometheus
+      - prometheus_data:/prometheus
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prometheus.rule=Host(`${PROMETHEUS_DOMAIN}`)"
@@ -44,7 +44,9 @@ services:
     networks:
       - monitoring_net
     volumes:
-      - /home/node:/home/node:ro
+      - '/:/host:ro,rslave'
+    command:
+      - '--path.rotfs=/host'
   
   cadvisor:
     image: gcr.io/cadvisor/cadvisor
@@ -64,9 +66,10 @@ services:
     restart: unless-stopped
     networks:
       - traefik_net
+      - monitoring_net
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - grafana-data:/var/lib/grafana
+      - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
