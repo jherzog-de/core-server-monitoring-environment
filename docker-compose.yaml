@@ -6,6 +6,10 @@ networks:
     name: "monitoring_net"
     driver: bridge
 
+volumes:
+  grafana-data:
+  prometheus-data:
+
 services:
   
   prometheus:
@@ -21,7 +25,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
       - ./prometheus/web.yaml:/etc/prometheus/web.yaml:ro
-      - ${VOLUME_PATH_PROMETHEUS}:/prometheus
+      - prometheus-data:/prometheus
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prometheus.rule=Host(`${PROMETHEUS_DOMAIN}`)"
@@ -62,7 +66,7 @@ services:
       - traefik_net
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ${VOLUME_PATH_GRAFANA}:/var/lib/grafana
+      - grafana-data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
